@@ -4,6 +4,7 @@
 #define __SO_UTIL_H__
 
 #include <stdint.h>
+#include <stddef.h>
 
 #define ALIGN_MEM(x, align) (((x) + ((align) - 1)) & ~((align) - 1))
 
