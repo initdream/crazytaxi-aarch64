@@ -74,12 +74,13 @@ extern void opensles_shim_pump_callbacks(void) __attribute__((weak));
 
 int main(int argc, char *argv[]) {
     debugPrintf("=== Crazy Taxi Classic AARCH64 ===\n");
+
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
+        fatal_error("Failed to init SDL2: %s", SDL_GetError());
+    }
     SDL_DisplayMode dm;
     if (SDL_GetDesktopDisplayMode(0, &dm) != 0) {
         fatal_error("SDL_GetDesktopDisplayMode failed: %s", SDL_GetError());
-    }
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
-        fatal_error("Failed to init SDL2: %s", SDL_GetError());
     }
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
