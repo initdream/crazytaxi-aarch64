@@ -2,6 +2,10 @@
 
 Port of Crazy Taxi Classic (Android aarch64) to Linux aarch64
 
+## Screenshots
+
+<img src="images/muOS_20260615_2049_2.png" width="49%"> <img src="images/muOS_20260616_0257_0.png" width="49%">
+
 ## Requirements
 
 - An aarch64 environment
