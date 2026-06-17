@@ -266,6 +266,8 @@ static void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
 
   /* Per-player temp buffer on stack */
   int16_t tmp[TMP_BUF_SAMPLES];
+  static int16_t tmp_16bit[MAX_TMP_SAMPLES];
+  static uint8_t raw_buf[MAX_TMP_SAMPLES * sizeof(int16_t)];
 
   /* Per-player diagnostics for click detection */
   float player_peak[MAX_PLAYERS];
