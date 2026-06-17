@@ -38,7 +38,7 @@ make
   * For the framework and template to build off of.
 
 * **[BinaryCounter](https://github.com/binarycounter)**
-    * For showing a prototype of this game working, giving me the opoortunity to research the so-loading technique that resulted in this port.
+    * For showing a prototype of this game working, giving me the opportunity to research the so-loading technique that resulted in this port.
 
 ## Legal
 
