@@ -48,6 +48,7 @@ static int map_sdl_button_to_android(int sdl_button) {
         case SDL_CONTROLLER_BUTTON_X: return AKEYCODE_BUTTON_Y;
         case SDL_CONTROLLER_BUTTON_Y: return AKEYCODE_BUTTON_X;
         case SDL_CONTROLLER_BUTTON_START: return AKEYCODE_BUTTON_START;
+        case SDL_CONTROLLER_BUTTON_BACK: return AKEYCODE_BACK; 
         case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: return AKEYCODE_BUTTON_L1;
         case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: return AKEYCODE_BUTTON_R1;
         case SDL_CONTROLLER_BUTTON_DPAD_UP: return AKEYCODE_DPAD_UP;
@@ -185,14 +186,45 @@ int main(int argc, char *argv[]) {
                     break;
                 }
                 case SDL_CONTROLLERAXISMOTION:
-                    if (Java_com_sega_CrazyTaxi_GL2JNILib_onJoystickActive) {
-                        float val = e.caxis.value / 32767.0f;
-                        if (val > -0.2f && val < 0.2f) val = 0.0f;
-
+                    if (g_gamepad) {
                         if (e.caxis.axis == SDL_CONTROLLER_AXIS_LEFTX || e.caxis.axis == SDL_CONTROLLER_AXIS_LEFTY) {
                             float lx = (float)SDL_GameControllerGetAxis(g_gamepad, SDL_CONTROLLER_AXIS_LEFTX) / 32767.0f;
                             float ly = (float)SDL_GameControllerGetAxis(g_gamepad, SDL_CONTROLLER_AXIS_LEFTY) / 32767.0f;
-                            Java_com_sega_CrazyTaxi_GL2JNILib_onJoystickActive(fake_env, NULL, 0, lx, ly);
+                            
+                            if (lx > -0.2f && lx < 0.2f) lx = 0.0f;
+                            if (ly > -0.2f && ly < 0.2f) ly = 0.0f;
+
+                            if (Java_com_sega_CrazyTaxi_GL2JNILib_onJoystickActive) {
+                                Java_com_sega_CrazyTaxi_GL2JNILib_onJoystickActive(fake_env, NULL, 0, lx, ly);
+                            }
+                        }
+                        else if (e.caxis.axis == SDL_CONTROLLER_AXIS_RIGHTX || e.caxis.axis == SDL_CONTROLLER_AXIS_RIGHTY) {
+                            float rx = (float)SDL_GameControllerGetAxis(g_gamepad, SDL_CONTROLLER_AXIS_RIGHTX) / 32767.0f;
+                            float ry = (float)SDL_GameControllerGetAxis(g_gamepad, SDL_CONTROLLER_AXIS_RIGHTY) / 32767.0f;
+                            
+                            if (rx > -0.2f && rx < 0.2f) rx = 0.0f;
+                            if (ry > -0.2f && ry < 0.2f) ry = 0.0f;
+
+                            if (Java_com_sega_CrazyTaxi_GL2JNILib_onJoystickActive) {
+                                Java_com_sega_CrazyTaxi_GL2JNILib_onJoystickActive(fake_env, NULL, 1, rx, ry);
+                            }
+                        }
+                        else if (e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT || e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT) {
+                            if (Java_com_sega_CrazyTaxi_GL2JNILib_onJoyButton) {
+                                static int l2_pressed = 0;
+                                static int r2_pressed = 0;
+                                
+                                int is_down = (e.caxis.value > 16384) ? 1 : 0; 
+                                
+                                if (e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT && is_down != l2_pressed) {
+                                    l2_pressed = is_down;
+                                    Java_com_sega_CrazyTaxi_GL2JNILib_onJoyButton(fake_env, NULL, AKEYCODE_BUTTON_L2, is_down);
+                                }
+                                else if (e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT && is_down != r2_pressed) {
+                                    r2_pressed = is_down;
+                                    Java_com_sega_CrazyTaxi_GL2JNILib_onJoyButton(fake_env, NULL, AKEYCODE_BUTTON_R2, is_down);
+                                }
+                            }
                         }
                     }
                     break;
