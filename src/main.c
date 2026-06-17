@@ -44,8 +44,8 @@ static SDL_GameController *g_gamepad = NULL;
 
 static int map_sdl_button_to_android(int sdl_button) {
     switch (sdl_button) {
-        case SDL_CONTROLLER_BUTTON_A: return AKEYCODE_BUTTON_B;
-        case SDL_CONTROLLER_BUTTON_B: return AKEYCODE_BUTTON_A;
+        case SDL_CONTROLLER_BUTTON_A: return AKEYCODE_BUTTON_A;
+        case SDL_CONTROLLER_BUTTON_B: return AKEYCODE_BUTTON_B;
         case SDL_CONTROLLER_BUTTON_X: return AKEYCODE_BUTTON_Y;
         case SDL_CONTROLLER_BUTTON_Y: return AKEYCODE_BUTTON_X;
         case SDL_CONTROLLER_BUTTON_START: return AKEYCODE_BUTTON_START;
@@ -211,20 +211,18 @@ int main(int argc, char *argv[]) {
                             }
                         }
                         else if (e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT || e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT) {
-                            if (Java_com_sega_CrazyTaxi_GL2JNILib_onJoyButton) {
-                                static int l2_pressed = 0;
-                                static int r2_pressed = 0;
-                                
-                                int is_down = (e.caxis.value > 16384) ? 1 : 0; 
-                                
-                                if (e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT && is_down != l2_pressed) {
-                                    l2_pressed = is_down;
-                                    Java_com_sega_CrazyTaxi_GL2JNILib_onJoyButton(fake_env, NULL, AKEYCODE_BUTTON_L2, is_down);
-                                }
-                                else if (e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT && is_down != r2_pressed) {
-                                    r2_pressed = is_down;
-                                    Java_com_sega_CrazyTaxi_GL2JNILib_onJoyButton(fake_env, NULL, AKEYCODE_BUTTON_R2, is_down);
-                                }
+                            static int l2_pressed = 0;
+                            static int r2_pressed = 0;
+                            
+                            int is_down = (e.caxis.value > 16384) ? 1 : 0; 
+                            
+                            if (e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT && is_down != l2_pressed) {
+                                l2_pressed = is_down;
+                                Java_com_sega_CrazyTaxi_GL2JNILib_onJoyButton(fake_env, NULL, AKEYCODE_BUTTON_L1, is_down);
+                            }
+                            else if (e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT && is_down != r2_pressed) {
+                                r2_pressed = is_down;
+                                Java_com_sega_CrazyTaxi_GL2JNILib_onJoyButton(fake_env, NULL, AKEYCODE_BUTTON_R1, is_down);
                             }
                         }
                     }
