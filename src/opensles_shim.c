@@ -72,7 +72,7 @@ typedef struct {
   volatile uint32_t ring_head;
   volatile uint32_t ring_tail;
 
-  uint32_t queued_sizes[64];
+  uint32_t queued_sizes[24576];
   volatile uint32_t queued_head_index;
   volatile uint32_t queued_tail_index;
   volatile uint32_t queued_count;
@@ -104,6 +104,7 @@ typedef struct {
   float volume;
   int active;
   uint64_t played_bytes;
+  uint32_t resample_pos;
 
   SLuint32 num_channels;
   SLuint32 sample_rate;
@@ -225,9 +226,29 @@ static uint32_t ring_read(AudioPlayer *p, void *data, uint32_t len) {
   return len;
 }
 
+static uint32_t ring_peek(const AudioPlayer *p, void *data, uint32_t len) {
+  uint32_t avail = ring_readable(p);
+  if (len > avail)
+    len = avail;
+  if (len == 0)
+    return 0;
+
+  uint8_t *dst = (uint8_t *)data;
+  uint32_t tail = p->ring_tail & RING_BUFFER_MASK;
+  uint32_t first = RING_BUFFER_SIZE - tail;
+  if (first > len)
+    first = len;
+  memcpy(dst, p->ring + tail, first);
+  if (len > first)
+    memcpy(dst + first, p->ring, len - first);
+
+  return len;
+}
+
 /* SDL2 audio callback */
 #define SDL_OUTPUT_RATE 44100
-#define TMP_BUF_SAMPLES (SDL_AUDIO_SAMPLES * 2)
+#define TMP_BUF_SAMPLES (SDL_AUDIO_SAMPLES * 4)
+#define MAX_TMP_SAMPLES (SDL_AUDIO_SAMPLES * 8) 
 
 static void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
   (void)userdata;
@@ -267,6 +288,7 @@ static void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
       src_channels = 2;
     uint32_t frame_size = src_channels * sizeof(int16_t);
     float vol = p->volume;
+    
     /* Guard against corrupted volume */
     if (vol < 0.0f || vol > 2.0f || vol != vol /* NaN */) {
       static uint32_t vol_warn = 0;
@@ -287,19 +309,24 @@ static void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
     player_active_list[num_active++] = i;
 
     uint32_t src_frames_needed;
+    uint32_t step = 0;
+
     if (src_rate == SDL_OUTPUT_RATE) {
       src_frames_needed = out_frames;
     } else {
-      src_frames_needed =
-          (uint32_t)((uint64_t)out_frames * src_rate / SDL_OUTPUT_RATE) + 2;
+      step = (uint32_t)((uint64_t)src_rate * 65536 / SDL_OUTPUT_RATE);
+      uint32_t end_pos = p->resample_pos + out_frames * step;
+      /* We need exactly the frames we'll touch +1 for linear interpolation target */
+      src_frames_needed = (end_pos >> 16) + 1;
     }
 
     uint32_t src_bytes_want = src_frames_needed * frame_size;
-    if (src_bytes_want > sizeof(tmp))
-      src_bytes_want = sizeof(tmp);
+    if (src_bytes_want > sizeof(raw_buf))
+      src_bytes_want = sizeof(raw_buf);
     src_bytes_want = (src_bytes_want / frame_size) * frame_size;
 
-    uint32_t got = ring_read(p, tmp, src_bytes_want);
+
+    uint32_t got = ring_peek(p, raw_buf, src_bytes_want);
     got = (got / frame_size) * frame_size;
     uint32_t src_frames_got = got / frame_size;
     if (src_frames_got == 0)
@@ -307,8 +334,19 @@ static void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
     queue_consume(p, got);
     p->played_bytes += got;
 
-    /* Detect underrun: got less than requested = fade out last frames to avoid
-     * click */
+    //resample
+    uint32_t total_samples = src_frames_got * src_channels;
+    if (bps == 8) {
+      for (uint32_t s = 0; s < total_samples; s++) {
+        /* 8-bit unsigned (0 to 255) -> subtract 128 to make signed -> shift up to 16-bit */
+        tmp_16bit[s] = (int16_t)((raw_buf[s] - 128) << 8);
+      }
+    } else {
+      /* Already 16-bit, just copy into our working array */
+      memcpy(tmp_16bit, raw_buf, total_samples * sizeof(int16_t));
+    }
+
+    /* Detect underrun: got less than requested = fade out last frames to avoid click */
     int underrun = (got < src_bytes_want);
     uint32_t fade_out_len = 64;
     uint32_t fade_start = 0;
@@ -327,6 +365,8 @@ static void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
     /* Fade-in: first 32 output frames of a player's lifetime */
     uint32_t fadein_remaining =
         (p->frames_played < 32) ? (32 - p->frames_played) : 0;
+        
+    uint32_t frames_consumed = 0;
 
     if (src_rate == SDL_OUTPUT_RATE && src_channels == 2) {
       uint32_t n = src_frames_got;
@@ -347,8 +387,8 @@ static void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
         if (env < 0.0f)
           env = 0.0f;
         float v = vol * env;
-        float cl = (float)tmp[f * 2] * v;
-        float cr = (float)tmp[f * 2 + 1] * v;
+        float cl = (float)tmp_16bit[f * 2] * v;
+        float cr = (float)tmp_16bit[f * 2 + 1] * v;
         mix_buf[f * 2] += cl;
         mix_buf[f * 2 + 1] += cr;
         float ap = fabsf(cl);
@@ -359,9 +399,9 @@ static void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
           player_peak[i] = ap;
       }
       p->frames_played += n;
+      frames_consumed = n;
     } else {
-      uint32_t step = (uint32_t)((uint64_t)src_rate * 65536 / SDL_OUTPUT_RATE);
-      uint32_t pos = 0;
+      uint32_t pos = p->resample_pos;
       /* Map fade_start from source frames to output frames */
       uint32_t fade_start_out =
           underrun
@@ -380,16 +420,16 @@ static void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
 
         float l0, r0, l1, r1;
         if (src_channels == 1) {
-          l0 = (float)tmp[idx];
+          l0 = (float)tmp_16bit[idx];
           r0 = l0;
-          l1 = (idx + 1 < src_frames_got) ? (float)tmp[idx + 1] : l0;
+          l1 = (idx + 1 < src_frames_got) ? (float)tmp_16bit[idx + 1] : l0;
           r1 = l1;
         } else {
-          l0 = (float)tmp[idx * 2];
-          r0 = (float)tmp[idx * 2 + 1];
+          l0 = (float)tmp_16bit[idx * 2];
+          r0 = (float)tmp_16bit[idx * 2 + 1];
           if (idx + 1 < src_frames_got) {
-            l1 = (float)tmp[(idx + 1) * 2];
-            r1 = (float)tmp[(idx + 1) * 2 + 1];
+            l1 = (float)tmp_16bit[(idx + 1) * 2];
+            r1 = (float)tmp_16bit[(idx + 1) * 2 + 1];
           } else {
             l1 = l0;
             r1 = r0;
@@ -428,6 +468,17 @@ static void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
         mixed++;
       }
       p->frames_played += mixed;
+
+      frames_consumed = pos >> 16;
+      p->resample_pos = pos & 0xFFFF;
+    }
+
+    uint32_t bytes_consumed = frames_consumed * frame_size;
+    if (bytes_consumed > 0) {
+      queue_consume(p, bytes_consumed);
+      p->played_bytes += bytes_consumed;
+      __sync_synchronize();
+      p->ring_tail += bytes_consumed;
     }
   }
 
@@ -548,6 +599,8 @@ static void player_reset_meta(AudioPlayer *p) {
   p->volume = 1.0f;
   p->active = 1;
   p->played_bytes = 0;
+  p->resample_pos = 0;
+  p->resample_pos = 0;
   p->num_channels = 0;
   p->sample_rate = 0;
   p->bits_per_sample = 0;
@@ -735,6 +788,10 @@ static SLresult play_SetCallbackEventsMask(void *self, SLuint32 eventFlags) {
 
 /* SLVolumeItf methods */
 static SLresult volume_SetVolumeLevel(void *self, SLmillibel level) {
+
+  if (level > 0 && level <= 65535) {
+    level = (int16_t)level;
+  }
   float linear;
   if (level <= -9600)
     linear = 0.0f;
@@ -1184,46 +1241,38 @@ void opensles_shim_pump_callbacks(void) {
     int max_calls = 4;
     while (p->callback && readable <= refill_threshold && max_calls > 0) {
       uint32_t counter_before = p->enqueue_counter;
-      /* if (p->debug_callback_logs < 16 || counter_before % 64 == 0) {
-        debugPrintf("opensles_shim: player %d callback readable=%u threshold=%u
-      counter=%u\n", i, readable, refill_threshold, counter_before);
-        p->debug_callback_logs++;
-      } */
+      
       p->callback(&p->bq_ptr, p->callback_context);
 
-      if (p->ever_enqueued && !p->decoder_done &&
-          p->enqueue_counter == counter_before) {
+      if (p->enqueue_counter == counter_before) {
         p->decoder_done = 1;
-        /* debugPrintf("opensles_shim: player %d decoder_done after callback
-           readable=%u counter=%u\n", i, ring_readable(p), p->enqueue_counter);
-         */
-        break;
+        break; 
+      } else {
+        p->decoder_done = 0; 
       }
+      
       readable = ring_readable(p);
       max_calls--;
     }
 
-    if (!p->callback && p->ever_enqueued && !p->decoder_done &&
-        p->queued_count == 0 && readable == 0) {
-      p->decoder_done = 1;
-      /* debugPrintf("opensles_shim: player %d decoder_done after queue
-       * drain\n", i); */
-    }
 
-    // HEADATEND: fire play callback when decoder done and ring drained
     if (p->decoder_done && !p->headatend_fired) {
       if (ring_readable(p) == 0) {
         p->headatend_fired = 1;
+        
         if (p->play_callback && (p->play_event_mask & SL_PLAYEVENT_HEADATEND)) {
           p->play_callback(&p->play_ptr, p->play_callback_context,
                            SL_PLAYEVENT_HEADATEND);
-          /* debugPrintf("opensles_shim: player %d HEADATEND fired (underruns=%u
-             fadeouts=%u)\n", i, p->underrun_count, p->fadeout_count); */
         }
+        
         if (g_audio_dev)
           SDL_LockAudioDevice(g_audio_dev);
+          
         p->play_state = SL_PLAYSTATE_STOPPED;
+        p->ring_head = 0;
+        p->ring_tail = 0;
         queue_reset(p);
+        
         if (g_audio_dev)
           SDL_UnlockAudioDevice(g_audio_dev);
       }
