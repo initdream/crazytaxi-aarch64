@@ -338,6 +338,7 @@ static void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
 
     //resample
     uint32_t total_samples = src_frames_got * src_channels;
+    uint32_t bps = p->bits_per_sample;
     if (bps == 8) {
       for (uint32_t s = 0; s < total_samples; s++) {
         /* 8-bit unsigned (0 to 255) -> subtract 128 to make signed -> shift up to 16-bit */
