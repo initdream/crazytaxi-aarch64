@@ -29,6 +29,7 @@ typedef int jint;
 #define AKEYCODE_BUTTON_L2 104
 #define AKEYCODE_BUTTON_R2 105
 #define AKEYCODE_BUTTON_START 108
+#define AKEYCODE_BACK 4
 
 static jint (*JNI_OnLoad)(void *vm, void *reserved);
 static void (*Java_com_sega_CrazyTaxi_GL2JNILib_assetmanager)(void *env, void *clazz, void *assetManager);
