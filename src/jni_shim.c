@@ -27,6 +27,8 @@ enum {
   MID_GET_VIEW_TOUCH_NUM,
   MID_GET_LOCAL_PATH,
   MID_PLAY_INTRO_VIDEO,
+  MID_GET_FILES_DIR,  
+  MID_GET_ABSOLUTE_PATH, 
   MID_GENERIC,
 };
 static int g_method_tags[16];
@@ -82,6 +84,10 @@ static void *jni_GetMethodID(void *env, void *clazz, const char *name,
     return &g_method_tags[MID_GET_VIEW_TOUCH_NUM];
   if (strcmp(name, "getLocalPath") == 0)
     return &g_method_tags[MID_GET_LOCAL_PATH];
+  if (strcmp(name, "getFilesDir") == 0 || strcmp(name, "getCacheDir") == 0 || strcmp(name, "getExternalFilesDir") == 0)
+    return &g_method_tags[MID_GET_FILES_DIR];
+  if (strcmp(name, "getAbsolutePath") == 0 || strcmp(name, "getPath") == 0)
+    return &g_method_tags[MID_GET_ABSOLUTE_PATH];
   return &g_method_tags[MID_GENERIC];
 }
 
@@ -97,6 +103,13 @@ static void *jni_CallObjectMethod(void *env, void *obj, void *methodID, ...) {
   debugPrintf("jni_shim: CallObjectMethod(mid=%p)\n", methodID);
   if (methodID == &g_method_tags[MID_GET_LOCAL_PATH]) {
     return make_jstring("./");
+  }
+  if (methodID == &g_method_tags[MID_GET_FILES_DIR]) {
+    static int fake_file_dir_obj;
+    return &fake_file_dir_obj;
+  }
+  if (methodID == &g_method_tags[MID_GET_ABSOLUTE_PATH]) {
+    return make_jstring(".");
   }
   static int fake_obj;
   return &fake_obj;
