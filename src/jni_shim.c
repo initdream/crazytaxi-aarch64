@@ -96,6 +96,8 @@ static void *jni_GetStaticMethodID(void *env, void *clazz, const char *name,
   debugPrintf("jni_shim: GetStaticMethodID(%s, %s)\n", name, sig);
   if (strcmp(name, "playIntroVideo") == 0)
     return &g_method_tags[MID_PLAY_INTRO_VIDEO];
+  if (strcmp(name, "getLocalPath") == 0)
+    return &g_method_tags[MID_GET_LOCAL_PATH];
   return &g_method_tags[MID_GENERIC];
 }
 
@@ -139,6 +141,9 @@ static void jni_CallVoidMethod(void *env, void *obj, void *methodID, ...) {
 
 static void *jni_CallStaticObjectMethod(void *env, void *clazz, void *methodID,
                                         ...) {
+  if (methodID == &g_method_tags[MID_GET_LOCAL_PATH]) {
+    return make_jstring(".");
+  }
   static int fake_result;
   return &fake_result;
 }
