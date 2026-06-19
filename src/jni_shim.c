@@ -96,6 +96,8 @@ static void *jni_GetStaticMethodID(void *env, void *clazz, const char *name,
   debugPrintf("jni_shim: GetStaticMethodID(%s, %s)\n", name, sig);
   if (strcmp(name, "playIntroVideo") == 0)
     return &g_method_tags[MID_PLAY_INTRO_VIDEO];
+  if (strcmp(name, "getFilesDir") == 0 || strcmp(name, "getLocalPath") == 0)
+    return &g_method_tags[MID_GET_LOCAL_PATH];
   if (strcmp(name, "getLocalPath") == 0)
     return &g_method_tags[MID_GET_LOCAL_PATH];
   return &g_method_tags[MID_GENERIC];
@@ -104,13 +106,6 @@ static void *jni_GetStaticMethodID(void *env, void *clazz, const char *name,
 static void *jni_CallObjectMethod(void *env, void *obj, void *methodID, ...) {
   debugPrintf("jni_shim: CallObjectMethod(mid=%p)\n", methodID);
   if (methodID == &g_method_tags[MID_GET_LOCAL_PATH]) {
-    return make_jstring("./");
-  }
-  if (methodID == &g_method_tags[MID_GET_FILES_DIR]) {
-    static int fake_file_dir_obj;
-    return &fake_file_dir_obj;
-  }
-  if (methodID == &g_method_tags[MID_GET_ABSOLUTE_PATH]) {
     return make_jstring(".");
   }
   static int fake_obj;
