@@ -151,6 +151,16 @@ int __FD_ISSET_chk(int fd, fd_set *set, size_t setlen) {
   return FD_ISSET(fd, set);
 }
 
+static char *getenv_fake(const char *name) {
+    if (name && strcmp(name, "EXTERNAL_STORAGE") == 0) {
+        return ".";
+    }
+    if (name && strcmp(name, "HOME") == 0) {
+        return ".";
+    }
+    return getenv(name);
+}
+
 static FILE *my_fopen(const char *pathname, const char *mode) {
   return fopen(resolve_android_path(pathname), mode);
 }
@@ -639,7 +649,7 @@ DynLibFunction dynlib_functions[] = {
     {"gai_strerror", (uintptr_t)&gai_strerror},
     {"getaddrinfo", (uintptr_t)&getaddrinfo},
     {"getauxval", (uintptr_t)&getauxval_stub},
-    {"getenv", (uintptr_t)&getenv},
+    {"getenv", (uintptr_t)&getenv_fake},
     {"gethostbyname", (uintptr_t)&gethostbyname},
     {"getnameinfo", (uintptr_t)&getnameinfo},
     {"getpagesize", (uintptr_t)&getpagesize},
