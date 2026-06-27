@@ -23,7 +23,7 @@ make
 ## Run
 
 ```bash
-./crazitaxi
+./crazytaxi
 ```
 
 ## Credits
